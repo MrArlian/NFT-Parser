@@ -1,92 +1,89 @@
+from datetime import datetime, timedelta
+
 import typing
-import datetime
+import time
+import re
+
 import requests
 
-from configobj import ConfigObj
+from bs4 import BeautifulSoup
 
 
-cfg = ConfigObj('static/config.cfg')
+URL = 'https://larvalabs.com/cryptopunks/sales'
+HOST = 'https://larvalabs.com'
 
-TOKEN = cfg.get('API_TOKEN')
-
-#URL = 'https://api.opensea.io/api/v1/events'
-URL = 'https://testnets-api.opensea.io/api/v1/events'
 HEADERS = {
-    'Accept': 'application/json',
-    'X-API-KEY': TOKEN
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+                   AppleWebKit/537.36 (KHTML, like Gecko) \
+                   Chrome/96.0.4664.110 Safari/537.36',
+    'accept': '*/*'
+}
+
+IN_SECONDS = {
+    'hours': 3600,
+    'hour': 3600,
+
+    'minutes': 60,
+    'minute': 60,
+
+    'seconds': 1,
+    'second': 1
 }
 
 
-def _get_data(collection: str,
-              limit: int = 1,
-              before: float = None,
-              after: float = None) -> typing.Dict[str, typing.List[dict]]:
-
+def _get_data(per_page: int = 10) -> str:
     """
-        Requests data from the site: https://api.opensea.io/api/v1/events
+        Getting the html template.
 
-        collection: Сollection name.
-        limit: Еhe amount of data to receive. Max. 300
-        after: Seconds in unix will filter the time data. After.
-        before: Seconds in unix will filter the time data. Before.
-
-        https://docs.opensea.io/reference/retrieving-asset-events
+        :perPage: Number of items per page.
     """
 
     session = requests.Session()
     session.headers = HEADERS
 
-    data = {
-        'collection_slug': collection,
-        'event_type': 'successful',
-        'occurred_before': before,
-        'occurred_after': after,
-        'only_opensea': False,
-        'limit': limit,
-        'offset': 0
-    }
-
-    response = session.get(URL, params=data)
+    response = session.get(URL, params={'perPage': per_page})
 
     if response.ok is False:
         print(f'Request Error: Status {response.status_code}')
-        return {}
+        return ''
 
-    return response.json()
+    return response.text
 
 
-def parser(collection: str,
-           limit: int = 1,
-           timestamp_before: float = None,
-           timestamp_after: float = None) -> typing.List[list]:
-
+def parser(timestamp_1: float, timestamp_2: float) -> typing.List[list]:
     """
         Parsing raw data.
 
-        collection: Сollection name.
-        limit: Еhe amount of data to receive. Max. 300
-        timestamp_after: Seconds in unix will filter the time data. After.
-        timestamp_before: Seconds in unix will filter the time data. Before.
+        :timestamp_1: Seconds in unix. After.
+        :timestamp_2: Seconds in unix. Before.
     """
 
-    raw_data = _get_data(collection, limit, timestamp_before, timestamp_after)
+    soup = BeautifulSoup(_get_data(), 'html.parser')
+
+    main_div = soup.find(class_='row row-flex')
+    items = main_div.find_all(class_='col-flex')
+
+    now = datetime.now()
     pars_data = []
 
-    for data in raw_data.get('asset_events', []):
-        token_id = data.get('asset').get('token_id', 0)
-        img_url = data.get('asset').get('image_url')
-        name = data.get('asset').get('name')
+    for item in items:
+        div = item.find(class_='punk-image-text-dense')
 
-        currency = data.get('payment_token').get('symbol')
-        iso_date = data.get('created_date')
-        price = data.get('total_price')
+        img_url = HOST + item.a.img.get('src', '')
+        name = item.a.get('title', '')
 
-        created_at = datetime.datetime.fromisoformat(iso_date)
-        name = name if '#' in name else f'{name} #{token_id}'
+        data = re.split(r'[ΞK\s]', div.get_text(strip=True))
+        coin, price, num, label = data[:4]
+
+        seconds = float(num) * IN_SECONDS.get(label, 86400)
+        created_at = now - timedelta(seconds=seconds)
         date = created_at.strftime('%H:%M %d-%m-%Y')
-        price = int(price[::-1][15:][::-1]) / 1000
+        name = ' '.join(name.split()[:2])
 
-        pars_data.append([img_url, name, price, currency, date])
+        unix_time = time.mktime(created_at.timetuple())
+
+        if timestamp_1 < unix_time < timestamp_2:
+            pars_data.append([img_url, name, coin, price, date])
 
     pars_data.reverse()
     return pars_data

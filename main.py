@@ -29,7 +29,7 @@ def main():
         And also creates a new tweet based on this data.
     """
 
-    text_pattern = '%s\n\nКуплено за %s ETC - %sK\n%s'
+    text_pattern = '%s\n\nBought for %s ETC - %sK\n%s'
 
     while True:
         timestamp = time.time()

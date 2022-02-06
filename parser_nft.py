@@ -73,17 +73,17 @@ def parser(timestamp_1: float, timestamp_2: float) -> typing.List[list]:
         name = item.a.get('title', '')
 
         data = re.split(r'[ΞK\s]', div.get_text(strip=True))
-        coin, price, num, label = data[:4]
+        coin, _, num, label = data[:4]
 
         seconds = float(num) * IN_SECONDS.get(label, 86400)
         created_at = now - timedelta(seconds=seconds)
-        date = created_at.strftime('%H:%M %d-%m-%Y')
+        date = created_at.strftime('%H:%M')
         name = ' '.join(name.split()[:2])
 
         unix_time = time.mktime(created_at.timetuple())
 
         if timestamp_1 < unix_time < timestamp_2:
-            pars_data.append([img_url, name, coin, price, date])
+            pars_data.append([img_url, name, coin, date])
 
     pars_data.reverse()
     return pars_data

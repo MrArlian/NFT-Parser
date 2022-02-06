@@ -29,7 +29,7 @@ def main():
         And also creates a new tweet based on this data.
     """
 
-    text_pattern = '%s\n\nBought for %s ETC - %sK\n%s'
+    text_pattern = '{}\nSale: {} ETC\nTime: {} UTC'
 
     while True:
         timestamp = time.time()
@@ -51,7 +51,7 @@ def main():
             new_img.close()
 
             media = bot.simple_upload(None, file=buff.getvalue())
-            bot.update_status(status=text_pattern % tuple(data[1:]),
+            bot.update_status(status=text_pattern.format(*data[1:]),
                               media_ids=[media.media_id])
 
             buff.close()
